@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../models/scan_record_model.dart';
 import '../../services/scan_database_service.dart';
 import '../../components/navigation/app_bottom_nav_bar.dart';
+import 'treatment_view.dart';
 
 class ScanHistoryView extends StatefulWidget {
   const ScanHistoryView({super.key});
@@ -344,7 +345,19 @@ class _ScanDetailView extends StatelessWidget {
                       color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 16)),
               const SizedBox(height: 12),
               ...record.diseases.asMap().entries.map(
-                    (e) => _DetailDiseaseCard(rank: e.key + 1, disease: e.value),
+                    (e) => _DetailDiseaseCard(
+                      rank: e.key + 1,
+                      disease: e.value,
+                      onTreatmentTap: e.value.isHealthy
+                          ? null
+                          : () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => TreatmentView(
+                                    diseaseName: e.value.name,
+                                  ),
+                                ),
+                              ),
+                    ),
                   ),
               const SizedBox(height: 20),
             ],
@@ -406,9 +419,14 @@ class _ScanDetailView extends StatelessWidget {
 }
 
 class _DetailDiseaseCard extends StatelessWidget {
-  const _DetailDiseaseCard({required this.rank, required this.disease});
+  const _DetailDiseaseCard({
+    required this.rank,
+    required this.disease,
+    this.onTreatmentTap,
+  });
   final int rank;
   final DiseaseEntry disease;
+  final VoidCallback? onTreatmentTap;
 
   @override
   Widget build(BuildContext context) {
@@ -435,9 +453,11 @@ class _DetailDiseaseCard extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
-                child: Text('#$rank',
-                    style: TextStyle(
-                        color: color, fontWeight: FontWeight.w800, fontSize: 12)),
+                child: disease.isHealthy
+                    ? Icon(Icons.check_circle_rounded, color: color, size: 18)
+                    : Text('#$rank',
+                        style: TextStyle(
+                            color: color, fontWeight: FontWeight.w800, fontSize: 12)),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -452,7 +472,7 @@ class _DetailDiseaseCard extends StatelessWidget {
                       fontSize: 20)),
             ],
           ),
-          if (disease.percentage > 0) ...[
+          if (disease.percentage > 0 && !disease.isHealthy) ...[
             const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(5),
@@ -461,6 +481,25 @@ class _DetailDiseaseCard extends StatelessWidget {
                 minHeight: 7,
                 backgroundColor: color.withValues(alpha: 0.1),
                 valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            ),
+          ],
+          if (onTreatmentTap != null) ...[
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: onTreatmentTap,
+              icon: Icon(Icons.medical_services_rounded, size: 16, color: c.primary),
+              label: Text(
+                'Tan-aw ug Rekomendasyon',
+                style: TextStyle(
+                  color: c.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                alignment: Alignment.centerLeft,
               ),
             ),
           ],

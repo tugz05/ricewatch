@@ -13,6 +13,7 @@ import '../../models/scan_record_model.dart';
 import '../../services/rice_leaf_analyzer_service.dart';
 import '../../services/scan_database_service.dart';
 import 'scan_history_view.dart';
+import 'treatment_view.dart';
 
 class RiceLeafScanView extends StatefulWidget {
   const RiceLeafScanView({super.key, this.autoLaunchCamera = false});
@@ -368,6 +369,15 @@ class _RiceLeafScanViewState extends State<RiceLeafScanView>
                             (e) => _DiseaseCard(
                               rank: e.key + 1,
                               disease: e.value,
+                              onTreatmentTap: e.value.isHealthy
+                                  ? null
+                                  : () => Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => TreatmentView(
+                                            diseaseName: e.value.name,
+                                          ),
+                                        ),
+                                      ),
                             ),
                           ),
                       const SizedBox(height: 20),
@@ -499,11 +509,11 @@ class _RiceLeafScanViewState extends State<RiceLeafScanView>
           child: Icon(Icons.biotech_rounded, color: c.primary, size: 20),
         ),
         const SizedBox(width: 10),
-        const Expanded(
+        Expanded(
           child: Text(
             'Resulta sa Analysis',
             style: TextStyle(
-              color: Colors.white,
+              color: c.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 17,
             ),
@@ -620,9 +630,14 @@ class _RiceLeafScanViewState extends State<RiceLeafScanView>
 // ── Disease Rank Card ────────────────────────────────────────────────────────
 
 class _DiseaseCard extends StatelessWidget {
-  const _DiseaseCard({required this.rank, required this.disease});
+  const _DiseaseCard({
+    required this.rank,
+    required this.disease,
+    this.onTreatmentTap,
+  });
   final int rank;
   final DiseaseEntry disease;
+  final VoidCallback? onTreatmentTap;
 
   @override
   Widget build(BuildContext context) {
@@ -641,7 +656,7 @@ class _DiseaseCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              // Rank badge
+              // Rank badge (or checkmark for healthy)
               Container(
                 width: 34,
                 height: 34,
@@ -650,14 +665,16 @@ class _DiseaseCard extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  '#$rank',
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                ),
+                child: disease.isHealthy
+                    ? Icon(Icons.check_circle_rounded, color: color, size: 20)
+                    : Text(
+                        '#$rank',
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -702,7 +719,7 @@ class _DiseaseCard extends StatelessWidget {
               ),
             ],
           ),
-          if (disease.percentage > 0) ...[
+          if (disease.percentage > 0 && !disease.isHealthy) ...[
             const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
@@ -711,6 +728,26 @@ class _DiseaseCard extends StatelessWidget {
                 minHeight: 8,
                 backgroundColor: color.withValues(alpha: 0.1),
                 valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            ),
+          ],
+          // Treatment button (only for diseases, not healthy)
+          if (onTreatmentTap != null) ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: onTreatmentTap,
+              icon: Icon(Icons.medical_services_rounded, size: 18, color: c.primary),
+              label: Text(
+                'Tan-aw ug Rekomendasyon sa Pagtambal',
+                style: TextStyle(
+                  color: c.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                alignment: Alignment.centerLeft,
               ),
             ),
           ],

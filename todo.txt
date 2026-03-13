@@ -1,0 +1,69 @@
+High-impact features
+1. Treatment recommendations for detected diseases
+After a scan, show suggested treatments (organic and chemical) in Cebuano.
+Link to common products and application steps.
+Use AI to generate recommendations from the detected disease.
+2. Field management
+Add/edit/delete rice fields with name, area, planting date, variety.
+Associate scans with specific fields.
+Simple growth stage tracking (e.g., vegetative, reproductive, ripening).
+Optional yield logging per field.
+3. Disease alerts
+Implement the existing “Disease Alerts” toggle.
+Use location + weather + scan history to estimate risk.
+Push notifications when risk is high in the user’s area.
+4. Weather alerts
+Implement the existing “Weather Alerts” toggle.
+Notifications for heavy rain, drought risk, strong winds, typhoons.
+Use the current weather API and location.
+5. Offline local disease model
+Integrate a small on-device model (e.g., TensorFlow Lite) for disease detection when offline.
+Fallback when there’s no internet, as mentioned in the scan flow.
+Medium-impact features
+6. Rice variety database
+List common Philippine rice varieties (e.g., IR64, NSIC Rc222).
+Basic info: growth duration, resistance, best practices.
+AI assistant can reference this when giving advice.
+7. Pest identification
+Extend scanning to pests (e.g., rice bugs, stem borers).
+Similar flow to leaf disease scanning.
+Simple pest–control suggestions.
+8. Irrigation / water schedule
+Simple irrigation reminders based on growth stage and weather.
+Optional water level tracking for fields.
+9. Harvest calendar
+Estimate harvest dates from planting date and variety.
+Reminders for pre-harvest tasks (e.g., drying, storage prep).
+10. Export / share scan reports
+Export scan results as PDF or image.
+Share with extension workers or buyers.
+Optional print-friendly layout.
+Nice-to-have features
+11. Multi-language
+Support Tagalog and English in addition to Cebuano.
+Language setting in Settings.
+12. Community / knowledge base
+FAQ or short articles on common diseases and practices.
+Searchable in Cebuano.
+13. Price / market info
+Basic palay price trends (if data is available).
+Optional links to DA or local market info.
+14. Photo gallery per field
+Attach photos to fields over time.
+Track crop progress and issues.
+15. Backup and sync
+Cloud backup of scan history and field data.
+Restore on new device.
+Quick wins (low effort)
+Connect Settings feature tiles – Make Scan & Analyze, Weather, AI Assistant navigate to the right screens.
+Pull-to-refresh on Scan History – Refresh the list.
+Search in AI chat – Search past conversations.
+Favorites / bookmarks – Save important AI answers.
+Onboarding tips – Short tutorial on first launch.
+Suggested order
+Connect Settings feature tiles.
+Treatment recommendations for scan results.
+Field management (add/edit fields, link scans).
+Disease and weather alerts.
+Offline local model when ready.
+These build on your existing scan, weather, AI, and field models and fit the app’s purpose for local farmers.

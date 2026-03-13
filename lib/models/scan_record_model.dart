@@ -25,7 +25,18 @@ class DiseaseEntry {
         symptoms: m['symptoms'] as String? ?? '',
       );
 
+  /// True when the entry represents a healthy leaf (no disease).
+  bool get isHealthy {
+    final n = name.toLowerCase();
+    return n.contains('healthy') ||
+        n.contains('himsog') ||
+        n.contains('wala') && (n.contains('sakit') || n.contains('disease')) ||
+        n.contains('no disease') ||
+        n.contains('walay sakit');
+  }
+
   Color get riskColor {
+    if (isHealthy) return const Color(0xFF388E3C); // Healthy — green
     if (percentage == 0) return const Color(0xFF607D8B); // unknown — grey-blue
     if (percentage >= 70) return const Color(0xFFD32F2F);
     if (percentage >= 40) return const Color(0xFFF57C00);
@@ -33,6 +44,7 @@ class DiseaseEntry {
   }
 
   String get riskLabel {
+    if (isHealthy) return 'Himsog (Healthy)';
     if (percentage == 0) return 'Nakit-an';
     if (percentage >= 70) return 'Grabe (High)';
     if (percentage >= 40) return 'Kababaw (Moderate)';
@@ -40,7 +52,8 @@ class DiseaseEntry {
   }
 
   /// Display string shown in the card badge ("75%" or "–" when unknown).
-  String get percentageLabel => percentage > 0 ? '$percentage%' : '–';
+  String get percentageLabel =>
+      isHealthy ? '✓' : (percentage > 0 ? '$percentage%' : '–');
 }
 
 /// One full scan record stored in the local database.
@@ -140,7 +153,16 @@ class ScanRecord {
       }
     }
 
-    // ── Pass 3: Known rice disease keyword scan ────────────────────────────
+    // ── Pass 3: Healthy / no disease check (only when no diseases found) ──
+    final lowerText = markdown.toLowerCase();
+    final isHealthyMentioned = lowerText.contains('healthy') ||
+        lowerText.contains('himsog') ||
+        (lowerText.contains('wala') && (lowerText.contains('sakit') || lowerText.contains('disease')));
+    if (entries.isEmpty && isHealthyMentioned) {
+      add('Healthy (Himsog)', 100); // 100% = healthy
+    }
+
+    // ── Pass 4: Known rice disease keyword scan ────────────────────────────
     if (entries.isEmpty) {
       const knownDiseases = [
         'Rice Blast', 'Brown Spot', 'Bacterial Leaf Blight',
