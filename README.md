@@ -31,10 +31,13 @@
 
 3. **Configure OpenAI API key**
    
-   Add your API key in one of these ways:
+   Copy the template and add your key:
+   ```bash
+   cp lib/core/config/openai_secrets.example.dart lib/core/config/openai_secrets.dart
+   ```
+   Then edit `lib/core/config/openai_secrets.dart` and set `openAiApiKeyFromFile`.
    
-   - **Option A:** Edit `lib/core/config/openai_secrets.dart` and set `openAiApiKeyFromFile`
-   - **Option B:** Run with dart-define:
+   Or use dart-define instead:
      ```bash
      flutter run --dart-define=OPENAI_API_KEY=sk-your-key-here
      ```
