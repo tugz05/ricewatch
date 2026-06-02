@@ -1,121 +1,133 @@
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
-import 'package:flutter_tts/flutter_tts.dart';
+import 'dart:convert';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import '../core/constants/api_config.dart';
 
-class TextToSpeechService {
+enum TtsPlayState { idle, loading, playing }
+
+class TextToSpeechService extends ChangeNotifier {
   static final TextToSpeechService _instance = TextToSpeechService._();
   factory TextToSpeechService() => _instance;
-  TextToSpeechService._();
 
-  final FlutterTts _tts = FlutterTts();
-  bool _initialized = false;
-
-  Future<void> _init() async {
-    if (_initialized) return;
-    _initialized = true;
-    try {
-      await _tts.setVolume(1.0);
-      await _tts.setSpeechRate(0.45);
-      await _tts.setPitch(1.0);
-
-      if (!kIsWeb) {
-        // Android: prefer Google TTS engine for best language coverage.
-        try {
-          final engines = await _tts.getEngines as List?;
-          final google = (engines ?? [])
-              .map((e) => e?.toString() ?? '')
-              .firstWhere((s) => s.toLowerCase().contains('google'), orElse: () => '');
-          if (google.isNotEmpty) await _tts.setEngine(google);
-        } catch (_) {}
-
-        // iOS: allow audio to mix with other sounds.
-        try {
-          await _tts.setIosAudioCategory(
-            IosTextToSpeechAudioCategory.playback,
-            [
-              IosTextToSpeechAudioCategoryOptions.allowBluetooth,
-              IosTextToSpeechAudioCategoryOptions.defaultToSpeaker,
-              IosTextToSpeechAudioCategoryOptions.mixWithOthers,
-            ],
-            IosTextToSpeechAudioMode.voicePrompt,
-          );
-        } catch (_) {}
-      }
-
-      // Pick the best available Filipino/Tagalog locale.
-      // Probing first ensures we don't silently fall back to English when
-      // a language pack is not installed on the device.
-      const candidates = ['fil-PH', 'fil', 'tl-PH', 'tl', 'en-PH'];
-      String chosen = 'fil-PH';
-      for (final locale in candidates) {
-        try {
-          final ok = await _tts.isLanguageAvailable(locale);
-          if (ok == true) { chosen = locale; break; }
-        } catch (_) {}
-      }
-      await _tts.setLanguage(chosen);
-      debugPrint('[TTS] using locale: $chosen');
-
-      // Try to pick a specifically Filipino/Tagalog voice if the platform
-      // exposes multiple voices for the chosen locale (e.g. male/female,
-      // different engines). This helps avoid English-accented voices.
-      try {
-        final voices = await _tts.getVoices as List?;
-        if (voices != null && voices.isNotEmpty) {
-          Map<String, String>? best;
-          for (final v in voices) {
-            final map = (v as Map?)?.map((k, v) => MapEntry('$k', '${v ?? ''}'));
-            if (map == null) continue;
-            final lang = (map['locale'] ?? map['language'] ?? '').toLowerCase();
-            final name = (map['name'] ?? '').toLowerCase();
-            final isFilLocale = lang.startsWith('fil') || lang.startsWith('tl');
-            final isPh = lang.contains('ph') || name.contains('philippines');
-            if (!isFilLocale) continue;
-            if (best == null || isPh) {
-              best = map;
-              if (isPh) break;
-            }
-          }
-          if (best != null) {
-            await _tts.setVoice({
-              'name': best['name'] ?? '',
-              'locale': best['locale'] ?? chosen,
-            });
-            debugPrint('[TTS] using voice: ${best['name']} (${best['locale']})');
-          }
-        }
-      } catch (_) {}
-
-      _tts.setErrorHandler((msg) => debugPrint('[TTS] $msg'));
-    } catch (e) {
-      debugPrint('[TTS] init error: $e');
-    }
+  TextToSpeechService._() {
+    _player.onPlayerComplete.listen((_) => _reset());
   }
 
-  /// Speaks [text]. Strips Markdown symbols so the voice reads clean prose.
-  Future<void> speak(String text) async {
+  final AudioPlayer _player = AudioPlayer();
+  TtsPlayState _state = TtsPlayState.idle;
+  String? _currentKey;
+  int _generation = 0;
+
+  TtsPlayState get state => _state;
+  String? get currentKey => _currentKey;
+
+  @visibleForTesting
+  static String cleanForSpeech(String md) => _stripMarkdown(md);
+
+  Future<void> speak(String text, {String? key}) async {
+    final gen = ++_generation;
+
+    await _player.stop();
+
+    _state = TtsPlayState.loading;
+    _currentKey = key;
+    notifyListeners();
+
+    if (!hasOpenAiKey) {
+      if (gen == _generation) _reset();
+      return;
+    }
+
     final plain = _stripMarkdown(text);
-    if (plain.trim().isEmpty) return;
+    if (plain.trim().isEmpty) {
+      if (gen == _generation) _reset();
+      return;
+    }
+
+    final input = plain.length > 4096 ? plain.substring(0, 4096) : plain;
+
     try {
-      await _init();
-      await _tts.stop();
-      final result = await _tts.speak(plain);
-      if (result != 1) debugPrint('[TTS] speak returned $result');
+      final response = await http
+          .post(
+            Uri.parse('https://api.openai.com/v1/audio/speech'),
+            headers: {
+              'Authorization': 'Bearer $openAiApiKey',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'model': 'tts-1',
+              'voice': 'nova',
+              'speed': 0.9,
+              'input': input,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (gen != _generation) return;
+
+      if (response.statusCode != 200) {
+        debugPrint('[TTS] API error: ${response.statusCode} ${response.body}');
+        if (gen == _generation) _reset();
+        return;
+      }
+
+      _state = TtsPlayState.playing;
+      notifyListeners();
+
+      await _player.play(BytesSource(response.bodyBytes));
     } catch (e) {
-      debugPrint('[TTS] speak error: $e');
+      debugPrint('[TTS] error: $e');
+      if (gen == _generation) _reset();
     }
   }
 
-  /// Stops current speech.
-  Future<void> stop() => _tts.stop();
+  Future<void> stop() async {
+    if (_state == TtsPlayState.idle) return;
+    ++_generation;
+    await _player.stop();
+    _reset();
+  }
 
-  /// Keeps the original formatted text, only doing minimal cleanup so the
-  /// TTS can read it without weird pauses. Markdown/formatting remains.
+  void _reset() {
+    _state = TtsPlayState.idle;
+    _currentKey = null;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
   static String _stripMarkdown(String md) {
     return md
-        // Neutralise dollar signs so TTS does not say "dollar".
+        // Fenced code blocks (must come before inline code)
+        .replaceAll(RegExp(r'```[\s\S]*?```'), '')
+        // Inline code
+        .replaceAllMapped(RegExp(r'`([^`\n]+)`'), (m) => m[1] ?? '')
+        // Bold **text** and __text__
+        .replaceAllMapped(RegExp(r'\*\*(.+?)\*\*'), (m) => m[1] ?? '')
+        .replaceAllMapped(RegExp(r'__(.+?)__'), (m) => m[1] ?? '')
+        // Italic *text* and _text_
+        .replaceAllMapped(RegExp(r'\*(.+?)\*'), (m) => m[1] ?? '')
+        .replaceAllMapped(RegExp(r'(?<!\w)_(.+?)_(?!\w)'), (m) => m[1] ?? '')
+        // ATX headers (# through ######)
+        .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
+        // Links [text](url) → text
+        .replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]+\)'), (m) => m[1] ?? '')
+        // Bullet list markers (- and *)
+        .replaceAll(RegExp(r'^\s*[-*]\s+', multiLine: true), '')
+        // Numbered list markers
+        .replaceAll(RegExp(r'^\s*\d+\.\s+', multiLine: true), '')
+        // Horizontal rules
+        .replaceAll(RegExp(r'^[-*_]{3,}\s*$', multiLine: true), '')
+        // Dollar signs (avoid TTS saying "dollar")
         .replaceAll(r'$', '')
-        // Normalise HTML non-breaking spaces and excessive whitespace/newlines.
+        // HTML entities
         .replaceAll('&nbsp;', ' ')
+        // Collapse excessive newlines / spaces
         .replaceAll(RegExp(r'\n{2,}'), '\n')
         .replaceAll(RegExp(r' {2,}'), ' ')
         .trim();
