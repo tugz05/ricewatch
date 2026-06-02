@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/constants/app_icons.dart';
 import '../../components/widgets/shimmer_loading.dart';
 import '../../core/utils/responsive.dart';
 import '../../controllers/ai_assistant_controller.dart';
@@ -213,11 +214,11 @@ class _AiAssistantViewState extends State<AiAssistantView> {
               if (isLastAssistant) {
                 // Typewriter only for fresh responses; DB-loaded messages show immediately.
                 if (!msg.isFreshResponse) {
-                  return _MessageBubble(message: msg, c: c);
+                  return _MessageBubble(message: msg, c: c, messageKey: _messageTypewriterKey(msg));
                 }
                 final messageKey = _messageTypewriterKey(msg);
                 if (ctrl.typewriterCompletedKey == messageKey) {
-                  return _MessageBubble(message: msg, c: c);
+                  return _MessageBubble(message: msg, c: c, messageKey: _messageTypewriterKey(msg));
                 }
                 return _TypewriterMessageBubble(
                   fullContent: msg.content,
@@ -226,7 +227,7 @@ class _AiAssistantViewState extends State<AiAssistantView> {
                   c: c,
                 );
               }
-              return _MessageBubble(message: msg, c: c);
+              return _MessageBubble(message: msg, c: c, messageKey: _messageTypewriterKey(msg));
             }
             if (ctrl.loading && index == ctrl.messages.length) {
               return _LoadingBubble(c: c);
@@ -412,14 +413,20 @@ class _AiAssistantViewState extends State<AiAssistantView> {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message, required this.c});
+  const _MessageBubble({
+    required this.message,
+    required this.c,
+    required this.messageKey,
+  });
 
   final ChatMessageModel message;
   final AppColorSet c;
+  final String messageKey;
 
   @override
   Widget build(BuildContext context) {
     final isUser = message.isUser;
+    final svc = TextToSpeechService();
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -506,18 +513,37 @@ class _MessageBubble extends StatelessWidget {
                         const SizedBox(height: 8),
                         Align(
                           alignment: Alignment.centerRight,
-                          child: IconButton(
-                            icon: Icon(
-                              Icons.volume_up_rounded,
-                              size: 20,
-                              color: c.accent.withValues(alpha: 0.9),
-                            ),
-                            onPressed: () => TextToSpeechService().speak(message.content),
-                            tooltip: 'Paminaw (Text to speech)',
-                            style: IconButton.styleFrom(
-                              padding: const EdgeInsets.all(4),
-                              minimumSize: const Size(32, 32),
-                            ),
+                          child: ListenableBuilder(
+                            listenable: svc,
+                            builder: (context, _) {
+                              final isThis = svc.currentKey == messageKey;
+                              if (isThis && svc.state == TtsPlayState.loading) {
+                                return const SizedBox(
+                                  width: 32,
+                                  height: 32,
+                                  child: Padding(
+                                    padding: EdgeInsets.all(6),
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                );
+                              }
+                              final isPlaying = isThis && svc.state == TtsPlayState.playing;
+                              return IconButton(
+                                icon: Icon(
+                                  isPlaying ? Icons.stop_rounded : AppIcons.volume,
+                                  size: 20,
+                                  color: c.accent.withValues(alpha: 0.9),
+                                ),
+                                onPressed: isPlaying
+                                    ? () => svc.stop()
+                                    : () => svc.speak(message.content, key: messageKey),
+                                tooltip: isPlaying ? 'Ihunong' : 'Paminaw (Text to speech)',
+                                style: IconButton.styleFrom(
+                                  padding: const EdgeInsets.all(4),
+                                  minimumSize: const Size(32, 32),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -579,6 +605,7 @@ class _TypewriterMessageBubbleState extends State<_TypewriterMessageBubble> {
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
+    final svc = TextToSpeechService();
     final content = widget.fullContent.isEmpty
         ? ''
         : widget.fullContent.substring(0, _visibleLength);
@@ -657,18 +684,39 @@ class _TypewriterMessageBubbleState extends State<_TypewriterMessageBubble> {
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerRight,
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.volume_up_rounded,
-                          size: 20,
-                          color: c.accent.withValues(alpha: 0.9),
-                        ),
-                        onPressed: () => TextToSpeechService().speak(widget.fullContent),
-                        tooltip: 'Paminaw (Text to speech)',
-                        style: IconButton.styleFrom(
-                          padding: const EdgeInsets.all(4),
-                          minimumSize: const Size(32, 32),
-                        ),
+                      child: ListenableBuilder(
+                        listenable: svc,
+                        builder: (context, _) {
+                          final isThis = svc.currentKey == widget.messageKey;
+                          if (isThis && svc.state == TtsPlayState.loading) {
+                            return const SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: Padding(
+                                padding: EdgeInsets.all(6),
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            );
+                          }
+                          final isPlaying = isThis && svc.state == TtsPlayState.playing;
+                          return IconButton(
+                            icon: Icon(
+                              isPlaying ? Icons.stop_rounded : AppIcons.volume,
+                              size: 20,
+                              color: c.accent.withValues(alpha: 0.9),
+                            ),
+                            onPressed: !_completedNotified
+                                ? null
+                                : isPlaying
+                                    ? () => svc.stop()
+                                    : () => svc.speak(widget.fullContent, key: widget.messageKey),
+                            tooltip: isPlaying ? 'Ihunong' : 'Paminaw (Text to speech)',
+                            style: IconButton.styleFrom(
+                              padding: const EdgeInsets.all(4),
+                              minimumSize: const Size(32, 32),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
