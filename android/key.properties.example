@@ -1,0 +1,10 @@
+# Copy to android/key.properties and fill in. Never commit key.properties or .jks.
+# Generate keystore (run once from android/app/):
+#   keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# Paths below are relative to android/app/ (the Gradle app module).
+
+storePassword=your-keystore-password
+keyPassword=your-key-password
+keyAlias=upload
+storeFile=upload-keystore.jks
